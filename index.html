@@ -5,15 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Do - نظام الرصد الميداني</title>
     
-    <!-- 1️⃣ روابط مكتبة الخرائط Leaflet المحدثة -->
+    <!-- روابط مكتبة الخرائط Leaflet المحدثة -->
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
     
-    <!-- 2️⃣ رابط مكتبة Supabase -->
+    <!-- رابط مكتبة Supabase -->
     <script src="https://jsdelivr.net"></script>
 
     <style>
-        html, body, #map { width: 100%; height: 100%; padding: 0; margin: 0; background: #161616; overflow: hidden; font-family: sans-serif; }
+        /* 1️⃣ تعديل المقاسات لضمان عدم ظهور الشاشة سوداء على الآيفون وجوجل كروم */
+        html, body { width: 100%; height: 100%; padding: 0; margin: 0; background: #161616; overflow: hidden; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; width: 100%; height: 100%; z-index: 1; }
         .report-btn { transition: all 0.2s; cursor: pointer; border: none; font-weight: 900; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .report-btn:active { transform: scale(0.95); }
     </style>
@@ -27,7 +29,10 @@
             <button onclick="verifyInvitation()" style="width: 100%; background: #00E5FF; border: none; font-weight: 900; padding: 14px; border-radius: 12px; margin-top: 15px; cursor: pointer; color: black;">🔓 تفعيل التطبيق</button>
         </div>
     </div>
+    
+    <!-- حاوية الخريطة -->
     <div id="map"></div>
+    
     <div id="reportPanel" style="position: absolute; top: 20px; left: 20px; right: 20px; z-index: 9999; display: none; flex-direction: column; gap: 10px;">
         <div style="background: rgba(29,29,29,0.9); border: 1px solid rgba(0,229,255,0.3); padding: 10px 20px; border-radius: 999px; display: flex; justify-content: space-between; align-items: center;">
             <span id="driverBadge" style="font-size: 12px; color: #00E5FF; font-weight: 900;">👤 راصد</span>
@@ -46,10 +51,8 @@
     <script>
         let map; let activeDriverCode = ""; let localPoints = 0;
         
-        // 3️⃣ تم استبدال النطاق والمفتاح ببياناتك العامة لحماية أمن تطبيقك
-        const supabaseUrl = 'https://supabase.co'; // تم بناؤه تلقائياً بناءً على رمز مشروعك
+        const supabaseUrl = 'https://supabase.co';
         const supabaseAnonKey = 'sb_publishable_Prk3oETMc41qFZV3MXaKLw_bBU5Qi5b';
-        
         const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
         
         function verifyInvitation() {
@@ -64,18 +67,24 @@
         }
         
         function initializeMap() {
+            // 2️⃣ تم إجبار الخريطة على أخذ الحجم الصحيح وتحديث العرض فوراً لمنع الشاشات السوداء
             map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 12);
             
-            // 4️⃣ تم إصلاح رابط خريطة الشارع المفتوح لتظهر على المتصفح والآيفون فوراً
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap'
             }).addTo(map);
 
+            // أمر إجباري لتحديث حجم أبعاد الخريطة في المتصفحات الذكية
+            setTimeout(() => { map.invalidateSize(); }, 500);
+
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(position => {
                     let lat = position.coords.latitude; let lng = position.coords.longitude;
+                    map.setView([lat, lng], 14); // تحريك الخريطة التلقائي لموقع الراصد
                     L.circleMarker([lat, lng], { radius: 10, fillColor: '#00E5FF', color: '#FFF', weight: 3, fillOpacity: 1 }).addTo(map);
+                }, error => {
+                    console.log("الـ GPS معطل أو مرفوض، تم عرض خريطة الخليج الافتراضية بنجاح.");
                 });
             }
         }
