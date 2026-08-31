@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Do - نظام الرصد الميداني</title>
     
-    <!-- روابط مكتبة الخرائط Leaflet مستدعاة من سيرفر cdnjs السريع والمفتوح في الخليج -->
-    <link rel="stylesheet" href="https://cloudflare.com" />
-    <script src="https://cloudflare.com"></script>
+    <!-- 1️⃣ روابط مكتبة الخرائط Leaflet الرسمية المؤمنة والمتوافقة بالكامل مع جيت هاب -->
+    <link rel="stylesheet" href="https://unpkg.com" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     
-    <!-- رابط مكتبة سوبابيز مستدعى من سيرفر cdnjs لتخطي مشكلة الحظر السابقة بالكامل -->
+    <!-- رابط مكتبة سوبابيز المستقر التابع لـ Cloudflare -->
     <script src="https://cloudflare.com"></script>
 
     <style>
@@ -29,7 +29,7 @@
         </div>
     </div>
     
-    <!-- حاوية الخريطة السوداء المخصصة لتطبيقك -->
+    <!-- حاوية الخريطة -->
     <div id="map"></div>
     
     <div id="reportPanel" style="position: absolute; top: 20px; left: 20px; right: 20px; z-index: 9999; display: none; flex-direction: column; gap: 10px;">
@@ -42,15 +42,14 @@
             <button onclick="sendReportToServer('🚗 ازدحام مروري')" class="report-btn" style="background: #FF5A1F; color: white; padding: 14px; font-size: 12px;">🚗 ازدحام مروري</button>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-            <button onclick="sendReportToServer('🚧 تحويل مروري')" class="report-btn" style="background: #FFD700; color: black; padding: 12px; font-size: 11px;">🚧 تحويله</button>
-            <button onclick="sendReportToServer('💥 حادث سير')" class="report-btn" style="background: #d97706; color: white; padding: 12px; font-size: 11px;">💥 حادث</button>
-            <button onclick="sendReportToServer('⚠️ خطر بالطريق')" class="report-btn" style="background: #dc2626; color: white; padding: 12px; font-size: 11px;">⚠️ حفره</button>
+            <button onclick="sendReportToServer('🚧 تحويل مروري')" class="report-btn" style="background: #FFD700; color: black; padding: 12px; font-size: 11px;">🚧 تحويلـه</button>
+            <button onclick="sendReportToServer('💥 حادث سير')" class="report-btn" style="background: #d97706; color: white; padding: 12px; font-size: 11px;">💥 حـادث</button>
+            <button onclick="sendReportToServer('⚠️ خطر بالطريق')" class="report-btn" style="background: #dc2626; color: white; padding: 12px; font-size: 11px;">⚠️ حفـره</button>
         </div>
     </div>
     <script>
         let map; let activeDriverCode = ""; let localPoints = 0; let supabaseClient = null;
         
-        // 🔒 حماية السطر البرمجي المنهار (try/catch) لكي تفتح الخريطة وتعمل مهما كانت حالة السيرفر الخارجي
         try {
             const supabaseUrl = 'https://supabase.co';
             const supabaseAnonKey = 'sb_publishable_Prk3oETMc41qFZV3MXaKLw_bBU5Qi5b';
@@ -58,7 +57,7 @@
                 supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
             }
         } catch(e) {
-            console.log("تنبيه: تعذر تهيئة مكتبة سوبابيز سحابياً، سيتم تشغيل الخريطة المستقلة.");
+            console.log("Supabase config delayed.");
         }
         
         function verifyInvitation() {
@@ -73,13 +72,19 @@
         }
         
         function initializeMap() {
-            // تثبيت أبعاد وبناء الخريطة على إحداثيات الخليج والكويت
+            // 2️⃣ حماية برمجية إضافية للتحقق من جاهزية مكتبة الخرائط قبل التفعيل ومنع الخطأ
+            if (typeof L === 'undefined') {
+                console.error("مكتبة الخرائط Leaflet لا تزال قيد التحميل، جاري إعادة المحاولة خلال لحظات...");
+                setTimeout(initializeMap, 500);
+                return;
+            }
+
+            // تثبيت مركز الخريطة الافتراضي على الخليج والكويت
             map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 11);
             
-            // تحديث إجباري للأبعاد لمنع المساحات السوداء
             setTimeout(() => { map.invalidateSize(); }, 300);
 
-            // استدعاء دالة جلب ورسم الطبقات الجغرافية المخصصة
+            // استدعاء دالة جلب الطبقات الجغرافية ورسمها من سوبابيز
             loadGccOsmData();
 
             if (navigator.geolocation) {
@@ -88,17 +93,13 @@
                     map.setView([lat, lng], 14);
                     L.circleMarker([lat, lng], { radius: 10, fillColor: '#00E5FF', color: '#FFF', weight: 3, fillOpacity: 1 }).addTo(map);
                 }, err => {
-                    console.log("إشارة الـ GPS متأخرة، يتم العرض الافتراضي لطبقات الخليج الجغرافية.");
+                    console.log("GPS local connection standby.");
                 });
             }
         }
 
-        // دالة جلب ورسم خطوط الطرق ونقاط الاهتمام المخصصة لك وتحويل عمود geom إلى صيغة GeoJSON مرئية
         async function loadGccOsmData() {
-            if (!supabaseClient) {
-                console.error("لا يمكن جلب بيانات الخليج الجغرافية لأن مكتبة سوبابيز معطلة بسبب حظر الـ CDN في جهازك.");
-                return;
-            }
+            if (!supabaseClient) return;
             try {
                 // 1️⃣ جلب الطرق ورسمها باللون الأصفر المخصص لك في QGIS
                 const { data: highways, error: hError } = await supabaseClient.from('master_highways').select('*').limit(1500);
@@ -130,7 +131,7 @@
                     });
                 }
             } catch (err) {
-                console.error("خطأ أثناء استدعاء طبقات خريطة الخليج من Supabase:", err);
+                console.error("Error drawing GCC map layers:", err);
             }
         }
         
@@ -145,7 +146,7 @@
                             L.marker([lat, lng]).addTo(map).bindPopup(type).openPopup();
                         }
                     } catch(err) {
-                        console.error("Error sending report:", err);
+                        console.error(err);
                     }
                 });
             }
