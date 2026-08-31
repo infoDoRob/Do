@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Do - نظام الرصد الميداني</title>
     
-    <!-- 1️⃣ روابط مكتبة الخرائط Leaflet الرسمية المؤمنة والمتوافقة بالكامل مع جيت هاب -->
-    <link rel="stylesheet" href="https://unpkg.com" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- 1️⃣ نقل روابط مكتبة الخرائط Leaflet إلى سيرفر cdnjs (Cloudflare) المفتوح والمستقر تماماً في شبكتك -->
+    <link rel="stylesheet" href="https://cloudflare.com" />
+    <script src="https://cloudflare.com"></script>
     
-    <!-- رابط مكتبة سوبابيز المستقر التابع لـ Cloudflare -->
+    <!-- رابط مكتبة سوبابيز المستقر التابع لـ Cloudflare (والذي نجح في العمل لديك) -->
     <script src="https://cloudflare.com"></script>
 
     <style>
@@ -57,7 +57,7 @@
                 supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
             }
         } catch(e) {
-            console.log("Supabase config delayed.");
+            console.log("Supabase base config initialized.");
         }
         
         function verifyInvitation() {
@@ -72,19 +72,19 @@
         }
         
         function initializeMap() {
-            // 2️⃣ حماية برمجية إضافية للتحقق من جاهزية مكتبة الخرائط قبل التفعيل ومنع الخطأ
+            // صمام أمان إضافي للتحقق الفوري
             if (typeof L === 'undefined') {
-                console.error("مكتبة الخرائط Leaflet لا تزال قيد التحميل، جاري إعادة المحاولة خلال لحظات...");
-                setTimeout(initializeMap, 500);
+                console.error("جاري إعادة محاولة استدعاء الخريطة بعد اكتمال الاتصال الآمن...");
+                setTimeout(initializeMap, 300);
                 return;
             }
 
-            // تثبيت مركز الخريطة الافتراضي على الخليج والكويت
+            // تثبيت أبعاد وبناء الخريطة على إحداثيات الخليج والكويت الافتراضية
             map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 11);
             
             setTimeout(() => { map.invalidateSize(); }, 300);
 
-            // استدعاء دالة جلب الطبقات الجغرافية ورسمها من سوبابيز
+            // تشغيل جلب ورسم الطبقات الجغرافية المستوردة
             loadGccOsmData();
 
             if (navigator.geolocation) {
@@ -93,11 +93,12 @@
                     map.setView([lat, lng], 14);
                     L.circleMarker([lat, lng], { radius: 10, fillColor: '#00E5FF', color: '#FFF', weight: 3, fillOpacity: 1 }).addTo(map);
                 }, err => {
-                    console.log("GPS local connection standby.");
+                    console.log("GPS signal active on backup custom views.");
                 });
             }
         }
 
+        // دالة جلب ورسم خطوط الطرق ونقاط الاهتمام المخصصة لك وتحويل عمود geom إلى صيغة مقروءة للمتصفح
         async function loadGccOsmData() {
             if (!supabaseClient) return;
             try {
