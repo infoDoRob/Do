@@ -5,18 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Do - نظام الرصد الميداني</title>
     
-    <!-- روابط مكتبة الخرائط Leaflet المحدثة -->
-    <link rel="stylesheet" href="https://unpkg.com" />
-    <script src="https://unpkg.com"></script>
+    <!-- استدعاء مكتبة Leaflet عبر سيرفر cdnjs لتخطي انقطاع الاتصال المكتشف في متصفحك -->
+    <link rel="stylesheet" href="https://cloudflare.com" />
+    <script src="https://cloudflare.com"></script>
     
-    <!-- رابط مكتبة Supabase -->
-    <script src="https://jsdelivr.net"></script>
+    <!-- استدعاء مكتبة Supabase عبر سيرفر cdnjs لضمان عمل قاعدة البيانات بالخليج -->
+    <script src="https://cloudflare.com"></script>
 
     <style>
-        /* 1️⃣ تعديل المقاسات لضمان عدم ظهور الشاشة سوداء على الآيفون وجوجل كروم */
         html, body { width: 100%; height: 100%; padding: 0; margin: 0; background: #161616; overflow: hidden; font-family: sans-serif; }
-        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; width: 100%; height: 100%; z-index: 1; }
-        .report-btn { transition: all 0.2s; cursor: pointer; border: none; font-weight: 900; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #map { position: absolute; top: 0; bottom: 0; left: 0; right: 0; width: 100%; height: 100%; z-index: 1; background: #161616; }
+        .report-btn { transition: all 0.2s; cursor: pointer; border: none; font-weight: 900; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 9999; position: relative; }
         .report-btn:active { transform: scale(0.95); }
     </style>
 </head>
@@ -43,17 +42,17 @@
             <button onclick="sendReportToServer('🚗 ازدحام مروري')" class="report-btn" style="background: #FF5A1F; color: white; padding: 14px; font-size: 12px;">🚗 ازدحام مروري</button>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-            <button onclick="sendReportToServer('🚧 تحويل مروري')" class="report-btn" style="background: #FFD700; color: black; padding: 12px; font-size: 11px;">🚧 تحويل</button>
+            <button onclick="sendReportToServer('🚧 تحويل مروري')" class="report-btn" style="background: #FFD700; color: black; padding: 12px; font-size: 11px;">🚧 تحويله</button>
             <button onclick="sendReportToServer('💥 حادث سير')" class="report-btn" style="background: #d97706; color: white; padding: 12px; font-size: 11px;">💥 حادث</button>
-            <button onclick="sendReportToServer('⚠️ خطر بالطريق')" class="report-btn" style="background: #dc2626; color: white; padding: 12px; font-size: 11px;">⚠️ خطر</button>
+            <button onclick="sendReportToServer('⚠️ خطر بالطريق')" class="report-btn" style="background: #dc2626; color: white; padding: 12px; font-size: 11px;">⚠️ حفره</button>
         </div>
     </div>
     <script>
-        let map; let activeDriverCode = ""; let localPoints = 0;
+        let map; let activeDriverCode = ""; let localPoints = 0; let supabaseClient;
         
         const supabaseUrl = 'https://supabase.co';
         const supabaseAnonKey = 'sb_publishable_Prk3oETMc41qFZV3MXaKLw_bBU5Qi5b';
-        const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
         
         function verifyInvitation() {
             const code = document.getElementById("inviteCodeInput").value.trim().toUpperCase();
@@ -67,38 +66,68 @@
         }
         
         function initializeMap() {
-            // 2️⃣ تم إجبار الخريطة على أخذ الحجم الصحيح وتحديث العرض فوراً لمنع الشاشات السوداء
-            map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 12);
+            // تثبيت مركز الخريطة على إحداثيات الخليج والكويت الافتراضية خلف واجهتك السوداء المخصصة
+            map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 11);
             
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap'
-            }).addTo(map);
+            setTimeout(() => { map.invalidateSize(); }, 300);
 
-            // أمر إجباري لتحديث حجم أبعاد الخريطة في المتصفحات الذكية
-            setTimeout(() => { map.invalidateSize(); }, 500);
+            // استدعاء البيانات الجغرافية ورسمها فوراً من جداول سوبابيز
+            loadGccOsmData();
 
             if (navigator.geolocation) {
                 navigator.geolocation.watchPosition(position => {
                     let lat = position.coords.latitude; let lng = position.coords.longitude;
-                    map.setView([lat, lng], 14); // تحريك الخريطة التلقائي لموقع الراصد
+                    map.setView([lat, lng], 14);
                     L.circleMarker([lat, lng], { radius: 10, fillColor: '#00E5FF', color: '#FFF', weight: 3, fillOpacity: 1 }).addTo(map);
-                }, error => {
-                    console.log("الـ GPS معطل أو مرفوض، تم عرض خريطة الخليج الافتراضية بنجاح.");
+                }, err => {
+                    console.log("GPS Location delayed. Standing by on GCC custom layers view.");
                 });
+            }
+        }
+
+        // دالة جلب ورسم خطوط الطرق ونقاط الاهتمام من جداول Supabase الخاصة بك
+        async function loadGccOsmData() {
+            try {
+                // 1️⃣ جلب ورسم خطوط الطرق (Highways) باللون الأصفر المخصص في QGIS
+                const { data: highways, error: hError } = await supabaseClient.from('master_highways').select('*').limit(1000);
+                if (!hError && highways) {
+                    highways.forEach(road => {
+                        if(road.geometry) { // تأكد من مطابقة اسم عمود الجيومتري في جدولك
+                            L.geoJSON(JSON.parse(road.geometry), { color: '#e5c158', weight: 2 }).addTo(map);
+                        }
+                    });
+                }
+
+                // 2️⃣ جلب ورسم نقاط الاهتمام (POIs) باللون الأحمر المخصص في QGIS
+                const { data: pois, error: pError } = await supabaseClient.from('master_amenities_pois').select('*').limit(1000);
+                if (!pError && pois) {
+                    pois.forEach(poi => {
+                        if(poi.geometry) {
+                            L.geoJSON(JSON.parse(poi.geometry), {
+                                pointToLayer: function (feature, latlng) {
+                                    return L.circleMarker(latlng, { radius: 4, fillColor: '#ff4444', color: '#fff', weight: 1, fillOpacity: 0.8 });
+                                }
+                            }).addTo(map);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("خطأ أثناء استدعاء ورسم طبقات خريطة الخليج الجغرافية:", err);
             }
         }
         
         async function sendReportToServer(type) {
-            if (navigator.geolocation) {
+            if (navigator.geolocation && supabaseClient) {
                 navigator.geolocation.getCurrentPosition(async position => {
                     const lat = position.coords.latitude; const lng = position.coords.longitude;
-                    const { error } = await supabaseClient.from('app_field_reports').insert([{ reporter_code: activeDriverCode, report_type: type, latitude: lat, longitude: lng }]);
-                    if (!error) {
-                        localPoints += 10; document.getElementById("pointsCounter").innerText = localPoints;
-                        L.marker([lat, lng]).addTo(map).bindPopup(type).openPopup();
-                    } else {
-                        console.error("خطأ في إرسال البلاغ:", error.message);
+                    try {
+                        const { error } = await supabaseClient.from('app_field_reports').insert([{ reporter_code: activeDriverCode, report_type: type, latitude: lat, longitude: lng }]);
+                        if (!error) {
+                            localPoints += 10; document.getElementById("pointsCounter").innerText = localPoints;
+                            L.marker([lat, lng]).addTo(map).bindPopup(type).openPopup();
+                        }
+                    } catch(err) {
+                        console.error("Error sending to database:", err);
                     }
                 });
             }
