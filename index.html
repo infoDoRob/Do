@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Do - نظام الرصد الميداني</title>
     
-    <!-- استدعاء مكتبة Leaflet عبر سيرفر cdnjs لتخطي انقطاع الاتصال المكتشف في متصفحك -->
+    <!-- روابط مكتبة الخرائط Leaflet مستدعاة من سيرفر cdnjs السريع والمفتوح في الخليج -->
     <link rel="stylesheet" href="https://cloudflare.com" />
     <script src="https://cloudflare.com"></script>
     
-    <!-- استدعاء مكتبة Supabase عبر سيرفر cdnjs لضمان عمل قاعدة البيانات بالخليج -->
+    <!-- رابط مكتبة سوبابيز مستدعى من سيرفر cdnjs لتخطي مشكلة الحظر السابقة بالكامل -->
     <script src="https://cloudflare.com"></script>
 
     <style>
@@ -29,7 +29,7 @@
         </div>
     </div>
     
-    <!-- حاوية الخريطة -->
+    <!-- حاوية الخريطة السوداء المخصصة لتطبيقك -->
     <div id="map"></div>
     
     <div id="reportPanel" style="position: absolute; top: 20px; left: 20px; right: 20px; z-index: 9999; display: none; flex-direction: column; gap: 10px;">
@@ -48,11 +48,18 @@
         </div>
     </div>
     <script>
-        let map; let activeDriverCode = ""; let localPoints = 0; let supabaseClient;
+        let map; let activeDriverCode = ""; let localPoints = 0; let supabaseClient = null;
         
-        const supabaseUrl = 'https://supabase.co';
-        const supabaseAnonKey = 'sb_publishable_Prk3oETMc41qFZV3MXaKLw_bBU5Qi5b';
-        supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        // 🔒 حماية السطر البرمجي المنهار (try/catch) لكي تفتح الخريطة وتعمل مهما كانت حالة السيرفر الخارجي
+        try {
+            const supabaseUrl = 'https://supabase.co';
+            const supabaseAnonKey = 'sb_publishable_Prk3oETMc41qFZV3MXaKLw_bBU5Qi5b';
+            if (typeof supabase !== 'undefined') {
+                supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+            }
+        } catch(e) {
+            console.log("تنبيه: تعذر تهيئة مكتبة سوبابيز سحابياً، سيتم تشغيل الخريطة المستقلة.");
+        }
         
         function verifyInvitation() {
             const code = document.getElementById("inviteCodeInput").value.trim().toUpperCase();
@@ -66,12 +73,13 @@
         }
         
         function initializeMap() {
-            // تثبيت مركز الخريطة على إحداثيات الخليج والكويت الافتراضية خلف واجهتك السوداء المخصصة
+            // تثبيت أبعاد وبناء الخريطة على إحداثيات الخليج والكويت
             map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 11);
             
+            // تحديث إجباري للأبعاد لمنع المساحات السوداء
             setTimeout(() => { map.invalidateSize(); }, 300);
 
-            // استدعاء البيانات الجغرافية ورسمها فوراً من جداول سوبابيز
+            // استدعاء دالة جلب ورسم الطبقات الجغرافية المخصصة
             loadGccOsmData();
 
             if (navigator.geolocation) {
@@ -80,39 +88,49 @@
                     map.setView([lat, lng], 14);
                     L.circleMarker([lat, lng], { radius: 10, fillColor: '#00E5FF', color: '#FFF', weight: 3, fillOpacity: 1 }).addTo(map);
                 }, err => {
-                    console.log("GPS Location delayed. Standing by on GCC custom layers view.");
+                    console.log("إشارة الـ GPS متأخرة، يتم العرض الافتراضي لطبقات الخليج الجغرافية.");
                 });
             }
         }
 
-        // دالة جلب ورسم خطوط الطرق ونقاط الاهتمام من جداول Supabase الخاصة بك
+        // دالة جلب ورسم خطوط الطرق ونقاط الاهتمام المخصصة لك وتحويل عمود geom إلى صيغة GeoJSON مرئية
         async function loadGccOsmData() {
+            if (!supabaseClient) {
+                console.error("لا يمكن جلب بيانات الخليج الجغرافية لأن مكتبة سوبابيز معطلة بسبب حظر الـ CDN في جهازك.");
+                return;
+            }
             try {
-                // 1️⃣ جلب ورسم خطوط الطرق (Highways) باللون الأصفر المخصص في QGIS
-                const { data: highways, error: hError } = await supabaseClient.from('master_highways').select('*').limit(1000);
+                // 1️⃣ جلب الطرق ورسمها باللون الأصفر المخصص لك في QGIS
+                const { data: highways, error: hError } = await supabaseClient.from('master_highways').select('*').limit(1500);
                 if (!hError && highways) {
                     highways.forEach(road => {
-                        if(road.geometry) { // تأكد من مطابقة اسم عمود الجيومتري في جدولك
-                            L.geoJSON(JSON.parse(road.geometry), { color: '#e5c158', weight: 2 }).addTo(map);
+                        if(road.geom) {
+                            try {
+                                let geoData = typeof road.geom === 'string' ? JSON.parse(road.geom) : road.geom;
+                                L.geoJSON(geoData, { color: '#e5c158', weight: 2 }).addTo(map);
+                            } catch(e) { }
                         }
                     });
                 }
 
-                // 2️⃣ جلب ورسم نقاط الاهتمام (POIs) باللون الأحمر المخصص في QGIS
+                // 2️⃣ جلب نقاط الاهتمام ورسمها باللون الأحمر المخصص لك في QGIS
                 const { data: pois, error: pError } = await supabaseClient.from('master_amenities_pois').select('*').limit(1000);
                 if (!pError && pois) {
                     pois.forEach(poi => {
-                        if(poi.geometry) {
-                            L.geoJSON(JSON.parse(poi.geometry), {
-                                pointToLayer: function (feature, latlng) {
-                                    return L.circleMarker(latlng, { radius: 4, fillColor: '#ff4444', color: '#fff', weight: 1, fillOpacity: 0.8 });
-                                }
-                            }).addTo(map);
+                        if(poi.geom) {
+                            try {
+                                let geoData = typeof poi.geom === 'string' ? JSON.parse(poi.geom) : poi.geom;
+                                L.geoJSON(geoData, {
+                                    pointToLayer: function (feature, latlng) {
+                                        return L.circleMarker(latlng, { radius: 4, fillColor: '#ff4444', color: '#fff', weight: 1, fillOpacity: 0.8 });
+                                    }
+                                }).addTo(map);
+                            } catch(e) { }
                         }
                     });
                 }
             } catch (err) {
-                console.error("خطأ أثناء استدعاء ورسم طبقات خريطة الخليج الجغرافية:", err);
+                console.error("خطأ أثناء استدعاء طبقات خريطة الخليج من Supabase:", err);
             }
         }
         
@@ -127,7 +145,7 @@
                             L.marker([lat, lng]).addTo(map).bindPopup(type).openPopup();
                         }
                     } catch(err) {
-                        console.error("Error sending to database:", err);
+                        console.error("Error sending report:", err);
                     }
                 });
             }
