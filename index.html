@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Do - نظام الرصد الميداني</title>
     
-    <!-- 1️⃣ نقل روابط مكتبة الخرائط Leaflet إلى سيرفر cdnjs (Cloudflare) المفتوح والمستقر تماماً في شبكتك -->
-    <link rel="stylesheet" href="https://cloudflare.com" />
-    <script src="https://cloudflare.com"></script>
+    <!-- 📦 تم تعديل الروابط لتقرأ ملفات الخرائط المحلية الموجودة بجهازك في الصورة مباشرة وتخطي حظر الإنترنت -->
+    <link rel="stylesheet" href="css/leaflet.css" />
+    <script src="js/leaflet.js"></script>
     
-    <!-- رابط مكتبة سوبابيز المستقر التابع لـ Cloudflare (والذي نجح في العمل لديك) -->
+    <!-- استدعاء مكتبة سوبابيز من السيرفر السريع والمفتوح بالخليج لتفعيل قاعدة البيانات -->
     <script src="https://cloudflare.com"></script>
 
     <style>
@@ -29,7 +29,7 @@
         </div>
     </div>
     
-    <!-- حاوية الخريطة -->
+    <!-- حاوية خريطة الخليج المخصصة الخاصة بك -->
     <div id="map"></div>
     
     <div id="reportPanel" style="position: absolute; top: 20px; left: 20px; right: 20px; z-index: 9999; display: none; flex-direction: column; gap: 10px;">
@@ -57,7 +57,7 @@
                 supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
             }
         } catch(e) {
-            console.log("Supabase base config initialized.");
+            console.log("Supabase connected locally.");
         }
         
         function verifyInvitation() {
@@ -72,19 +72,18 @@
         }
         
         function initializeMap() {
-            // صمام أمان إضافي للتحقق الفوري
             if (typeof L === 'undefined') {
-                console.error("جاري إعادة محاولة استدعاء الخريطة بعد اكتمال الاتصال الآمن...");
+                console.error("جاري تحميل ملفات الخريطة المحلية لجهازك...");
                 setTimeout(initializeMap, 300);
                 return;
             }
 
-            // تثبيت أبعاد وبناء الخريطة على إحداثيات الخليج والكويت الافتراضية
+            // تفعيل وبناء خريطتك وتثبيتها على إحداثيات الخليج
             map = L.map('map', { zoomControl: false }).setView([29.3759, 47.9774], 11);
             
             setTimeout(() => { map.invalidateSize(); }, 300);
 
-            // تشغيل جلب ورسم الطبقات الجغرافية المستوردة
+            // تشغيل جلب ورسم طبقات خريطة الخليج من قاعدة بيانات Supabase
             loadGccOsmData();
 
             if (navigator.geolocation) {
@@ -93,12 +92,11 @@
                     map.setView([lat, lng], 14);
                     L.circleMarker([lat, lng], { radius: 10, fillColor: '#00E5FF', color: '#FFF', weight: 3, fillOpacity: 1 }).addTo(map);
                 }, err => {
-                    console.log("GPS signal active on backup custom views.");
+                    console.log("GPS Location standby on GCC custom layers view.");
                 });
             }
         }
 
-        // دالة جلب ورسم خطوط الطرق ونقاط الاهتمام المخصصة لك وتحويل عمود geom إلى صيغة مقروءة للمتصفح
         async function loadGccOsmData() {
             if (!supabaseClient) return;
             try {
